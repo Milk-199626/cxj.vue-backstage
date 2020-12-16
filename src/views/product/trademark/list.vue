@@ -1,9 +1,12 @@
 <template>
   <div>
-    <el-button type="primary" icon="el-icon-plus" @click="visible = true"
-      >添加</el-button
+    <el-button type="primary" icon="el-icon-plus" @click="add">添加</el-button>
+    <el-table
+      v-loading="loading"
+      :data="BrandList"
+      border
+      style="width: 100% margin:20px 0"
     >
-    <el-table :data="BrandList" border style="width: 100% margin:20px 0">
       <el-table-column type="index" label="序列号" width="80" align="center">
       </el-table-column>
       <el-table-column prop="tmName" label="品牌名称"> </el-table-column>
@@ -12,9 +15,17 @@
           <img class="trademark-img" :src="scope.row.logoUrl" alt="logo" />
         </template>
       </el-table-column>
+      <!--  scope代表所有数据
+              scope.row 代表当前行所有数据 -->
       <el-table-column prop="operation" label="操作">
-        <el-button type="warning" icon="el-icon-edit">修改</el-button>
-        <el-button type="danger" icon="el-icon-delete">删除</el-button>
+        <template v-slot="{ row }">
+          <el-button type="warning" icon="el-icon-edit" @click="update(row)"
+            >修改</el-button
+          >
+          <el-button type="danger" icon="el-icon-delete" @click="del(row.id)"
+            >删除</el-button
+          >
+        </template>
       </el-table-column>
     </el-table>
     <!-- @size-change="handleSizeChange":每页显示的条数发生变化时触发  -->
@@ -99,9 +110,35 @@ export default {
         ],
         logoUrl: [{ required: true, message: "请上传品牌LOGO图片" }],
       },
+      loading: false,
     };
   },
   methods: {
+    //删除品牌
+    async del(id) {
+      const result = this.$API.trademark.delBrand(id);
+      this.$message.success(result.message || "删除属性成功");
+      this.getPageList(this.page, this.limit);
+    },
+    //添加品牌
+    add() {
+      this.$refs.BrandFrom && this.$refs.BrandFrom.clearValidate();
+      this.visible = true;
+      this.BrandFrom = {
+        tmName: "",
+        logoUrl: "",
+      };
+    },
+    // 修改表单
+    update(row) {
+      this.$refs.BrandFrom && this.$refs.BrandFrom.clearValidate();
+      //修改弹框隐藏
+      this.visible = true;
+      //展开数据赋值给它，不能直接赋值地址
+      // row 代表当前行的数据 {}
+      // this.trademarkForm = row; // 地址值一样，修改trademarkForm会导致trademarkList发生变化
+      this.BrandFrom = { ...row };
+    },
     //提交表单
     submitForm(BrandFrom) {
       //校检表单
@@ -109,8 +146,30 @@ export default {
         //表单通过
         if (valid) {
           //请求数据更新
-          const result = await this.$API.trademark.addBrand(this.BrandFrom);
-          console.log(result);
+          const { BrandFrom } = this;
+          //代表是否更新
+          const isUpdate = !!BrandFrom.id;
+          // console.log(isUpdate);
+          //如果修改的话则验证规则
+          if (isUpdate) {
+            const tm = this.BrandList.find((tm) => tm.id === BrandFrom.id);
+            // console.log(tm);
+            // console.log(BrandFrom);
+            if (
+              tm.tmName === BrandFrom.tmName &&
+              tm.logoUrl === BrandFrom.logoUrl
+            ) {
+              this.$message.warning("不能提交与之前一样的数据");
+              return;
+            }
+          }
+          let result;
+          if (isUpdate) {
+            result = await this.$API.trademark.updateBrand(BrandFrom);
+          } else {
+            result = await this.$API.trademark.addBrand(BrandFrom);
+          }
+          // console.log(result);
           //请求响应
           if (result.code === 200) {
             this.$message.success("添加品牌数据成功");
@@ -146,6 +205,7 @@ export default {
 
     //发送请求
     async getPageList(page, limit) {
+      this.loading = true;
       try {
         //请求数据
         const result = await this.$API.trademark.getPageList(page, limit);
@@ -163,6 +223,7 @@ export default {
       } catch {
         this.$message.error("获取品牌分页列表失败");
       }
+      this.loading = false;
     },
   },
 
@@ -184,9 +245,6 @@ export default {
 <style lang="sass" scoped>
 .trademark-img
   width: 150px
-.trademark-pagination
-  text-align: right
->>>.el-pagination__sizes
 
 >>>.avatar-uploader .el-upload
   border: 1px dashed #d9d9d9

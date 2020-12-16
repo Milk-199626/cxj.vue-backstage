@@ -1,7 +1,7 @@
 <template>
   <div>
     <el-card style="margin-top: 20px">
-      <el-form :model="spu" label-width="80px" ref="spuForm">
+      <el-form :model="spu" label-width="80px" ref="spuForm" :rules="rules">
         <el-form-item prop="spuName" label="SPU名称">
           <el-input
             placeholder="请输入SPU名称"
@@ -9,7 +9,7 @@
           ></el-input>
         </el-form-item>
 
-        <el-form-item label="品牌">
+        <el-form-item label="品牌" prop="trademark">
           <el-select placeholder="请选择品牌" v-model="spu.tmId">
             <el-option
               v-for="tm in TrademarkList"
@@ -32,7 +32,7 @@
             GET /admin/product/findBySpuId/{spuId}
             -->
 
-        <el-form-item label="SPU图片">
+        <el-form-item label="SPU图片" prop="SpuImageList">
           <el-upload
             class="avatar-uploader"
             accept="image/*"
@@ -68,9 +68,7 @@
             :disabled="!spu.saleAttr"
             >添加销售属性</el-button
           >
-        </el-form-item>
 
-        <el-form-item>
           <el-table
             :data="spuSaleAttrList"
             border
@@ -88,7 +86,7 @@
             <el-table-column label="属性值列表">
               <template v-slot="{ row }">
                 <el-tag
-                  @close="delTag(index, row)"
+                  @close="delTag(i, row)"
                   closable
                   v-for="spuSaleAttrValue in row.spuSaleAttrValueList"
                   :key="spuSaleAttrValue.id"
@@ -116,7 +114,7 @@
                   type="danger"
                   icon="el-icon-delete"
                   size="mini"
-                  @click="delSpuSaleAttr(index)"
+                  @click="delSpuSaleAttr"
                 ></el-button>
               </template>
             </el-table-column>
@@ -125,9 +123,14 @@
 
         <el-form-item>
           <el-button type="primary" @click="save">保存</el-button>
-          <el-button>取消</el-button>
+          <el-button @click="$emit('isShowList', spu.category3Id)"
+            >取消</el-button
+          >
         </el-form-item>
       </el-form>
+      <el-dialog :visible.sync="dialogVisible">
+        <img width="100%" :src="dialogImageUrl" alt="img" />
+      </el-dialog>
     </el-card>
   </div>
 </template>
@@ -148,6 +151,18 @@ export default {
       spuSaleAttrList: [], //spu销售属性
       saleAttrList: [], //销售属性列表
       spuSaleAttrValuetext: "",
+      rules: {
+        spuName: [{ required: true, message: "请输入SPU名称" }],
+        TrademarkList: [{ required: true, message: "请选择其中一项品牌" }],
+        description: [{ required: true, message: "需要填写SPU描述" }],
+        SpuImageList: [
+          {
+            validator: this.rulesSpuImageList,
+            required: true,
+          },
+        ],
+        saleAttr: [{ validator: this.rulesSaleAttrList, required: true }],
+      },
     };
   },
   computed: {
@@ -167,10 +182,36 @@ export default {
           (spuSaleAttr) => spuSaleAttr.baseSaleAttrId === saleAttr.id
         );
       });
-      // console.log(filterSpuSaleAttrList);
     },
   },
   methods: {
+    //校检属性值列表
+    rulesSaleAttrList(rule, value, callback) {
+      //校检销售属性
+      if (this.spuSaleAttrList.length === 0) {
+        callback(new Error("请至少添加一个销售属性"));
+        return;
+      }
+      //校检销售属性值列表
+      const isNotOK = this.spuSaleAttrList.some(
+        (spuSaleAttr) => spuSaleAttr.spuSaleAttrValueList.length === 0
+      );
+      if (isNotOK) {
+        callback(new Error("请至少添加一个销售属性值"));
+        return;
+      }
+      callback();
+    },
+    //图片校检规则
+    rulesSpuImageList(rule, value, callback) {
+      if (this.SpuImageList.length > 0) {
+        //校检通过
+        callback();
+        return;
+      }
+      //校检不通过
+      callback(new Error("请上传至少一张图片"));
+    },
     //保存
     save() {
       this.$refs.spuForm.validate(async (valid) => {
@@ -192,10 +233,17 @@ export default {
       "spuSaleAttrList":
 } */
           };
+          let result;
+          if (this.spu.id) {
+            result = await this.$API.spu.updateSpu(spu);
+          } else {
+            result = await this.$API.spu.saveSpu(spu);
+          }
+
           //发送请求
-          const result = await this.$API.spu.updateSpu(spu);
+
           if (result.code === 200) {
-            this.$message.success("更新SPU成功");
+            this.$message.success(`${this.spu.id ? "更新" : "添加"}SPU成功`);
             this.$emit("isShowList", this.spu.category3Id);
           } else {
             this.$message.error(result.message);
@@ -268,7 +316,6 @@ export default {
 
     // 上传图片之前触发的回调
     beforeAvatarUpload(file) {
-      console.log(file);
       const imgTyps = ["image/jpg", "image/png", "image/jpeg"];
       const isValidType = imgTyps.indexOf(file.type) > 1;
       const isLt = file.size / 1024 < 50;
@@ -299,15 +346,15 @@ export default {
     },
     //图片大小预览
     handlePictureCardPreview(file) {
+      console.log(111, file);
       this.dialogImageUrl = file.url;
       this.dialogVisible = true;
       // console.log("fileList", fileList);
     },
     //删除图片回调
     handleRemove(file, fileList) {
-      // console.log("111", file);
       this.SpuImageList = this.SpuImageList.filter(
-        (SpuImage) => SpuImage.url !== file.url
+        (SpuImage) => SpuImage.imgUrl !== file.url
       );
     },
     //获取所有商品图片
@@ -334,9 +381,11 @@ export default {
   },
   mounted() {
     this.getTrademarkList();
-    this.getSpuImageList();
-    this.getSpuSaleAttrList();
     this.salesAttrList();
+    if (this.spu.id) {
+      this.getSpuSaleAttrList();
+      this.getSpuImageList();
+    }
   },
 };
 </script>

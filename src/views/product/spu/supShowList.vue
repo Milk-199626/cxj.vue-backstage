@@ -5,6 +5,7 @@
         type="primary"
         icon="el-icon-plus"
         :disabled="!category.category3Id"
+        @click="$emit('showUpdateList', { category3Id: category.category3Id })"
         >添加SPU</el-button
       >
 
@@ -27,7 +28,7 @@
               type="primary"
               icon="el-icon-edit"
               size="mini"
-              @click="$emit('showUpdateList',row)"
+              @click="$emit('showUpdateList', row)"
             ></el-button>
             <el-button type="info" icon="el-icon-info" size="mini"></el-button>
             <el-button
